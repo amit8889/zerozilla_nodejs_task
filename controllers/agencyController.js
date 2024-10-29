@@ -68,7 +68,11 @@ exports.getTopClientByAgency = async (req, res) => {
               }
             }
           ]);
-        res.json(topClient);
+        res.status(200).json({
+            message: 'Top client by agency',
+            data: topClient,
+            success: true
+        });
     } catch (err) {
         res.status(500).json({ message: 'Error fetching top client', error: err.message });
     }
