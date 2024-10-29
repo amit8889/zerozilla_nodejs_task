@@ -3,18 +3,27 @@ const Client = require('../models/Client');
 
 // 1. Create an agency and a client
 exports.createAgencyAndClient = async (req, res) => {
-    const { name, address1, address2, state, city, phoneNumber, clientData } = req.body;
+    const { agencyDetails, clientDetails } = req.body;
 
     try {
-        const agency = new Agency({ name, address1, address2, state, city, phoneNumber });
-        await agency.save();
-
-        const client = new Client({ ...clientData, agencyId: agency._id });
-        await client.save();
-
-        res.status(201).json({ agency, client });
+        let  agency = null
+        if(agencyDetails?.agencyId){
+            agency = await Agency.findOne({_id:agencyDetails.agencyId})
+            if(!agency){
+                return res.status(404).json({message: 'Agency not found',success:false})
+            }
+        }else{
+            agency = await Agency.create(agencyDetails);
+        }
+        const client = await Client.create({ ...clientDetails, agencyId: agency._id });
+        res.status(201).json({
+            message: 'Agency and client created successfully',
+            agency,
+            client,
+            success:true
+         });
     } catch (err) {
-        res.status(500).json({ message: 'Error creating agency and client', error: err.message });
+        res.status(500).json({ message: 'Error creating agency and client', error: err.message,success:false });
     }
 };
 
@@ -24,13 +33,41 @@ exports.createAgencyAndClient = async (req, res) => {
 exports.getTopClientByAgency = async (req, res) => {
     try {
         const topClient = await Client.aggregate([
-            { $group: { _id: "$agencyId", maxBill: { $max: "$totalBill" } } },
-            { $lookup: { from: "agencies", localField: "_id", foreignField: "_id", as: "agency" } },
-            { $unwind: "$agency" },
-            { $sort: { maxBill: -1 } },
-            { $limit: 1 },
-            { $project: { AgencyName: "$agency.name", ClientName: "$name", TotalBill: "$maxBill" } }
-        ]);
+            {
+              $sort:{
+                  totalBill: -1
+                }
+            },
+            {
+              $limit:1
+            },
+            {
+              $project:{
+                  agencyId: 1,
+                  clientName: "$name",
+                  totalBill: 1
+                }
+            },
+            {
+              $lookup:{
+                  from: "agencies",
+                  localField: "agencyId",
+                  foreignField: "_id",
+                  as: "result"
+                }
+            },
+            {
+              $project: {
+                agencyId: 1,
+                clientName: 1,
+                totalBill: 1,
+                agencyName: {
+                  $arrayElemAt: ["$result.name", 0]
+                },
+                _id:0
+              }
+            }
+          ]);
         res.json(topClient);
     } catch (err) {
         res.status(500).json({ message: 'Error fetching top client', error: err.message });
